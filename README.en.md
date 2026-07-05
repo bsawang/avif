@@ -17,7 +17,7 @@ Windows 11 has native AVIF codec support and shows thumbnails out of the box. Th
 
 ---
 
-## Part 1: Quick Start (End Users)
+## Quick Start
 
 ### Prerequisites
 
