@@ -146,4 +146,4 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-[← Back to language selection](README.md) | [中文版](README.zh.md)
+[中文版](README.md)

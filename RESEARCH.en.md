@@ -190,4 +190,4 @@ All other directions are unnecessary.
 
 ---
 
-[← Back to language selection](RESEARCH.md) | [中文版](RESEARCH.zh.md)
+[中文版](RESEARCH.md)
