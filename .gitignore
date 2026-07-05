@@ -1,11 +1,14 @@
+# Build artifacts
 *.obj
 *.exp
 *.lib
-*.exe
 *.o
 *.a
 *.ilk
 *.pdb
 *.tlog
-*.log
 lastbuildstate
+
+# Keep executables in bin/ (avifdec.exe), ignore others
+*.exe
+!bin/*.exe
