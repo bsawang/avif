@@ -6,7 +6,7 @@
 ![GitHub Release](https://img.shields.io/github/v/release/bsawang/avif?logo=github)
 ![License](https://img.shields.io/badge/License-Non--Commercial_|_Dual-red)
 
-原生 C++ COM Shell 扩展，为 Windows 10 资源管理器添加 **AVIF 缩略图预览** 支持。
+**Windows 10 AVIF 缩略图解决方案** — 原生 C++ COM Shell 扩展，为 Windows 10 资源管理器添加 AVIF 缩略图预览支持。无需升级到 Windows 11，即可在文件资源管理器中直接查看 .avif 图片的缩略图。
 
 > **状态**: Windows 10 22H2 测试通过，MSVC 2022 编译。
 >

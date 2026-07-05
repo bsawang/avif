@@ -6,7 +6,7 @@
 ![GitHub Release](https://img.shields.io/github/v/release/bsawang/avif?logo=github)
 ![License](https://img.shields.io/badge/License-Non--Commercial_|_Dual-red)
 
-Native C++ COM Shell Extension that adds **AVIF thumbnail preview** to Windows 10 Explorer.
+**AVIF thumbnail preview for Windows 10 Explorer.** A native C++ COM Shell Extension that adds AVIF thumbnail support to Windows 10 File Explorer — no Windows 11 upgrade required. View .avif image thumbnails directly in Windows 10.
 
 > **Status**: Working on Windows 10 22H2. Built with MSVC 2022.
 
