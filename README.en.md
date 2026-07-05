@@ -40,6 +40,7 @@ Windows 11 has native AVIF codec support and shows thumbnails out of the box. Th
 2. Extract the archive
 3. **Right-click** `install.bat` → **Run as Administrator**
 4. Done — open any folder with `.avif` files to see thumbnails
+5. **Uninstall** — run `uninstall.bat` as Administrator
 
 **Option B: Manual Steps**
 

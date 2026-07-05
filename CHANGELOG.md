@@ -19,6 +19,7 @@
 - 项目结构精简，单源文件 dllmain.cpp ~630 行
 - 添加 avif.h 头文件依赖
 - 添加 lib/avif.lib 构建支持（暂不跟踪到仓库）
+- 添加 uninstall.bat（兼容 v1.0.0 清理）
 - 更新所有文档（README、RESEARCH）
 
 ---
