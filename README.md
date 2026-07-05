@@ -79,6 +79,15 @@ taskkill /f /im explorer.exe & start explorer.exe
 
 本实现使用 `IInitializeWithFile` 接口，因此需要设置 `DisableProcessIsolation = 1`。完整开发者参考（架构、源码构建、注册表配置）见 [RESEARCH.md](RESEARCH.md)。
 
+## 许可证
+
+**双授权模式** — 详见 [LICENSE](LICENSE)。
+
+- ✅ **非商业用途** — 免费使用，需保留版权声明
+- ❌ **商业用途** — 需取得授权，请邮件联系
+
+本工具使用了 libavif（BSD）、dav1d（BSD）、libyuv（BSD）及 IJG 等第三方组件。
+
 ---
 
 [English version](README.en.md)

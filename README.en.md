@@ -77,6 +77,15 @@ Explorer (in-process)
 
 The handler uses `DisableProcessIsolation = 1` because it implements `IInitializeWithFile` instead of `IInitializeWithStream`. See [RESEARCH.en.md](RESEARCH.en.md) for full investigation details and developer reference.
 
+## License
+
+**Dual License** — see [LICENSE](LICENSE).
+
+- ✅ **Non-commercial use** — free, with attribution required
+- ❌ **Commercial use** — requires a separate license agreement; contact by email
+
+This software incorporates third-party components: libavif (BSD), dav1d (BSD), libyuv (BSD), and IJG.
+
 ---
 
 [中文版](README.md)
