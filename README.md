@@ -88,6 +88,18 @@ taskkill /f /im explorer.exe & start explorer.exe
 
 本工具使用了 libavif（BSD）、dav1d（BSD）、libyuv（BSD）及 IJG 等第三方组件。
 
+## 编程环境
+
+本项目完全使用 AI 辅助编程完成：
+
+| 工具 | 版本 |
+|------|------|
+| VS Code | 最新 |
+| Claude Code | Claude 3.5 Sonnet (2024-10-22) |
+| DeepSeek | DeepSeek R1 (辅助代码生成) |
+| 编译器 | MSVC 2022 (VS 17.x) |
+| 操作系统 | Windows 10 Pro 22H2 |
+
 ---
 
 [English version](README.en.md)

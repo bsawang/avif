@@ -86,6 +86,18 @@ The handler uses `DisableProcessIsolation = 1` because it implements `IInitializ
 
 This software incorporates third-party components: libavif (BSD), dav1d (BSD), libyuv (BSD), and IJG.
 
+## Development Environment
+
+This project was built entirely with AI-assisted programming:
+
+| Tool | Version |
+|------|---------|
+| VS Code | Latest |
+| Claude Code | Claude 3.5 Sonnet (2024-10-22) |
+| DeepSeek | DeepSeek R1 (assisted code generation) |
+| Compiler | MSVC 2022 (VS 17.x) |
+| OS | Windows 10 Pro 22H2 |
+
 ---
 
 [中文版](README.md)
