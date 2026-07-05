@@ -82,7 +82,7 @@ The handler uses `DisableProcessIsolation = 1` because it implements `IInitializ
 **Dual License** — see [LICENSE](LICENSE).
 
 - ✅ **Non-commercial use** — free, with attribution required
-- ❌ **Commercial use** — requires a separate license agreement; contact by email
+- ❌ **Commercial use** — requires a separate license agreement; contact **bsawang@126.com**
 
 This software incorporates third-party components: libavif (BSD), dav1d (BSD), libyuv (BSD), and IJG.
 

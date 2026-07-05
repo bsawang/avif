@@ -84,7 +84,7 @@ taskkill /f /im explorer.exe & start explorer.exe
 **双授权模式** — 详见 [LICENSE](LICENSE)。
 
 - ✅ **非商业用途** — 免费使用，需保留版权声明
-- ❌ **商业用途** — 需取得授权，请邮件联系
+- ❌ **商业用途** — 需取得授权，请联系 **bsawang@126.com**
 
 本工具使用了 libavif（BSD）、dav1d（BSD）、libyuv（BSD）及 IJG 等第三方组件。
 
