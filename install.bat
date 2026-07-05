@@ -11,30 +11,33 @@ if %ERRORLEVEL% NEQ 0 (
 
 echo =============================================
 echo  AVIF Thumbnail Handler - Install
+echo  (libavif inline decode)
 echo =============================================
 echo.
 
-:: [1/5] Copy DLL
-echo [1/5] Installing DLL...
+:: [1/5] Cleanup old components + slow PropertyHandler
+echo [1/5] Cleaning up old components...
+if exist "%windir%\System32\AvifWIC.dll" (
+    echo   Removing old AvifWIC.dll...
+    del /f /q "%windir%\System32\AvifWIC.dll" >nul 2>&1
+)
+reg delete "HKLM\SOFTWARE\Classes\CLSID\{DF4C9A6E-5B3A-4F2A-9E8C-7D1E3F2A5B0D}" /f >nul 2>&1
+reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WIC\Decoders\.avif" /f >nul 2>&1
+reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WIC\Decoders\.avifs" /f >nul 2>&1
+:: Remove slow PropertyHandler (PhotoMetadataHandler) that causes 6-7s file dialog hangs
+reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\PropertySystem\PropertyHandlers\.avif" /f >nul 2>&1
+echo   [OK] Cleanup done
+
+:: [2/5] Copy DLL
+echo [2/5] Installing DLL...
 copy /y "%~dp0bin\AvifThumbCpp.dll" "%windir%\System32\AvifThumbCpp.dll" >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo   [FAIL] Cannot copy DLL ^(maybe Explorer is using it^)
+    echo   [FAIL] Cannot copy DLL (maybe Explorer is using it)
     echo          Close all Explorer windows and retry.
     pause
     exit /b 1
 )
-echo   [OK] AvifThumbCpp.dll installed
-
-:: [2/5] Install avifdec.exe
-echo [2/5] Installing avifdec.exe...
-if not exist "%ProgramFiles%\AvifThumbHandler" mkdir "%ProgramFiles%\AvifThumbHandler" >nul 2>&1
-copy /y "%~dp0bin\avifdec.exe" "%ProgramFiles%\AvifThumbHandler\avifdec.exe" >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo   [FAIL] Cannot copy avifdec.exe
-    pause
-    exit /b 1
-)
-echo   [OK] avifdec.exe installed
+echo   [OK] AvifThumbCpp.dll installed (libavif inline decode)
 
 :: [3/5] COM registration
 echo [3/5] Registering COM server...
@@ -42,7 +45,7 @@ reg add "HKLM\SOFTWARE\Classes\CLSID\{DF4C9A6E-5B3A-4F2A-9E8C-7D1E3F2A5B0C}" /ve
 reg add "HKLM\SOFTWARE\Classes\CLSID\{DF4C9A6E-5B3A-4F2A-9E8C-7D1E3F2A5B0C}\InprocServer32" /ve /t REG_SZ /d "%windir%\System32\AvifThumbCpp.dll" /f >nul
 reg add "HKLM\SOFTWARE\Classes\CLSID\{DF4C9A6E-5B3A-4F2A-9E8C-7D1E3F2A5B0C}\InprocServer32" /v ThreadingModel /t REG_SZ /d "Apartment" /f >nul
 
-:: KEY FIX: DisableProcessIsolation — see RESEARCH.md for details
+:: DisableProcessIsolation for in-process loading
 reg add "HKLM\SOFTWARE\Classes\CLSID\{DF4C9A6E-5B3A-4F2A-9E8C-7D1E3F2A5B0C}" /v DisableProcessIsolation /t REG_DWORD /d 1 /f >nul
 reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved" /v "{DF4C9A6E-5B3A-4F2A-9E8C-7D1E3F2A5B0C}" /t REG_SZ /d "AVIF Thumbnail Provider" /f >nul
 regsvr32 /s "%windir%\System32\AvifThumbCpp.dll"
@@ -69,7 +72,7 @@ echo =============================================
 echo  Install complete!
 echo.
 echo  Open a folder with .avif files to see thumbnails.
-echo  Debug log: C:\Windows\Temp\AvifThumbCpp.log
+echo  Debug log: %%TEMP%%\AvifThumbCpp.log
 echo =============================================
 echo.
 pause

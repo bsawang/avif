@@ -1,5 +1,5 @@
 // AvifThumbCpp.dll - Native C++ COM ShellEx for AVIF thumbnails
-// Compiled with MinGW-w64, uses avifdec.exe as subprocess
+// Compiled with MSVC, uses libavif inline decode
 #define WIN32_LEAN_AND_MEAN
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -7,14 +7,15 @@
 #include <windows.h>
 #include <shlobj.h>
 #include <thumbcache.h>
-#include <shobjidl.h>       // IInitializeWithFile
+#include <shobjidl.h>       // IInitializeWithFile, IInitializeWithStream
 #include <objbase.h>
 #include <strsafe.h>
 #include <cstdio>
 #include <algorithm>
 #include <gdiplus.h>
+#include <avif/avif.h>
 
-// Debug logging - uses ANSI file I/O for MinGW compatibility
+// Debug logging - uses ANSI file I/O
 static void LogMsg(const wchar_t* fmt, ...)
 {
     wchar_t buf[1024];
@@ -23,8 +24,11 @@ static void LogMsg(const wchar_t* fmt, ...)
     StringCbVPrintfW(buf, sizeof(buf), fmt, args);
     va_end(args);
     OutputDebugStringW(buf);
-    // Write UTF-8 to log file
-    FILE* f = _wfopen(L"C:\\Windows\\Temp\\AvifThumbCpp.log", L"a");
+    // Write UTF-8 to log file (use %TEMP% for compatibility with dllhost)
+    WCHAR logPath[MAX_PATH];
+    GetEnvironmentVariableW(L"TEMP", logPath, MAX_PATH);
+    wcscat_s(logPath, MAX_PATH, L"\\AvifThumbCpp.log");
+    FILE* f = _wfopen(logPath, L"a");
     if (f) {
         char mb[2048];
         WideCharToMultiByte(CP_UTF8, 0, buf, -1, mb, 2048, NULL, NULL);
@@ -50,6 +54,10 @@ const IID IID_IInitializeWithFile =
 // IID_IThumbnailProvider
 const IID IID_IThumbnailProvider =
     { 0xe357fccd, 0xa995, 0x4576, { 0xb0, 0x1f, 0x23, 0x46, 0x30, 0x15, 0x4e, 0x96 } };
+
+// IID_IInitializeWithStream: {b824b49d-22ac-4161-ac8a-9916e8fa3f7f}
+const IID IID_IInitializeWithStream =
+    { 0xb824b49d, 0x22ac, 0x4161, { 0xac, 0x8a, 0x99, 0x16, 0xe8, 0xfa, 0x3f, 0x7f } };
 
 // ---------- Module state ----------
 static HMODULE g_hModule = NULL;
@@ -81,13 +89,14 @@ class CClassFactory;
 
 
 // ---------- Thumbnail Provider ----------
-class CThumbProvider : public IInitializeWithFile, public IThumbnailProvider, public IExtractImage2
+class CThumbProvider : public IInitializeWithFile, public IInitializeWithStream, public IThumbnailProvider, public IExtractImage2
 {
 public:
-    CThumbProvider() : m_refCount(1), m_filePath(NULL), m_iconSize(0)
+    CThumbProvider() : m_refCount(1), m_filePath(NULL), m_iconSize(0), m_streamData()
         { InterlockedIncrement(&g_moduleRefCount); }
     ~CThumbProvider()
         { if (m_filePath) CoTaskMemFree(m_filePath);
+          if (m_streamData.data) avifRWDataFree(&m_streamData);
           InterlockedDecrement(&g_moduleRefCount); }
 
     // IUnknown
@@ -97,6 +106,8 @@ public:
         *ppv = NULL;
         if (riid == IID_IUnknown || riid == IID_IInitializeWithFile)
             *ppv = static_cast<IInitializeWithFile*>(this);
+        else if (riid == IID_IInitializeWithStream)
+            *ppv = static_cast<IInitializeWithStream*>(this);
         else if (riid == IID_IThumbnailProvider)
             *ppv = static_cast<IThumbnailProvider*>(this);
         else if (riid == __uuidof(IExtractImage) || riid == __uuidof(IExtractImage2))
@@ -131,18 +142,48 @@ public:
     // IThumbnailProvider
     IFACEMETHODIMP GetThumbnail(UINT cx, HBITMAP* phbmp, WTS_ALPHATYPE* pdwAlpha);
 
+    // IInitializeWithStream
+    IFACEMETHODIMP Initialize(IStream* pStream, DWORD)
+    {
+        LogMsg(L"IInitializeWithStream::Initialize");
+        if (!pStream) return E_INVALIDARG;
+
+        // Read stream into memory buffer (no temp file needed with libavif)
+        BYTE buf[65536];
+        avifRWData data = AVIF_DATA_EMPTY;
+        while (true) {
+            ULONG cbRead = 0;
+            HRESULT hr = pStream->Read(buf, sizeof(buf), &cbRead);
+            if (FAILED(hr) || cbRead == 0) break;
+            size_t oldSize = data.size;
+            if (avifRWDataRealloc(&data, oldSize + cbRead) != AVIF_RESULT_OK) {
+                avifRWDataFree(&data);
+                LogMsg(L"  realloc failed");
+                return E_OUTOFMEMORY;
+            }
+            memcpy(data.data + oldSize, buf, cbRead);
+            data.size = oldSize + cbRead;
+        }
+        if (data.size == 0) {
+            LogMsg(L"  empty stream");
+            return E_FAIL;
+        }
+        m_streamData = data;  // Transfer ownership
+        LogMsg(L"  read %zu bytes", m_streamData.size);
+        return S_OK;
+    }
+
     // IExtractImage
     IFACEMETHODIMP GetLocation(LPWSTR pszPathBuffer, DWORD cch,
         DWORD* pdwPriority, const SIZE* prgSize, DWORD dwRecClrDepth,
         DWORD* pdwFlags)
     {
         LogMsg(L"IExtractImage::GetLocation size=%dx%d", prgSize->cx, prgSize->cy);
-        // Return our file path
         if (m_filePath) {
             wcscpy_s(pszPathBuffer, cch, m_filePath);
         }
         m_iconSize = prgSize->cx;
-        *pdwFlags = IEIFLAG_OFFLINE;  // Don't try to extract from the internet
+        *pdwFlags = IEIFLAG_OFFLINE;
         return S_OK;
     }
 
@@ -163,6 +204,7 @@ public:
 private:
     LONG m_refCount;
     LPWSTR m_filePath;
+    avifRWData m_streamData;
     UINT m_iconSize;
 };
 
@@ -213,8 +255,6 @@ private:
 };
 
 // ---------- Helper: delegate to original PhotoMetadataHandler ----------
-// Must bypass COM TreatAs (which redirects to us) by loading DLL directly
-
 typedef HRESULT (__stdcall *DllGetClassObjectFunc)(REFCLSID, REFIID, void**);
 
 static HRESULT DelegateToPhotoThumbnail(const wchar_t* filePath, UINT cx,
@@ -222,7 +262,6 @@ static HRESULT DelegateToPhotoThumbnail(const wchar_t* filePath, UINT cx,
 {
     LogMsg(L"  delegating to PhotoMetadataHandler: %s", filePath);
 
-    // Load the original DLL manually to bypass TreatAs
     wchar_t sys32[MAX_PATH];
     GetSystemDirectoryW(sys32, MAX_PATH);
     wcscat_s(sys32, MAX_PATH, L"\\PhotoMetadataHandler.dll");
@@ -293,14 +332,20 @@ static bool IsAvifFile(const wchar_t* path)
     return (_wcsicmp(dot, L".avif") == 0);
 }
 
-// ---------- GetThumbnail implementation ----------
+// ---------- GetThumbnail implementation (libavif inline) ----------
 HRESULT CThumbProvider::GetThumbnail(UINT cx, HBITMAP* phbmp, WTS_ALPHATYPE* pdwAlpha)
 {
     *phbmp = NULL;
     *pdwAlpha = WTSAT_UNKNOWN;
 
     LogMsg(L"GetThumbnail: cx=%u path=%s", cx, m_filePath ? m_filePath : L"null");
-    if (!m_filePath) { LogMsg(L"  no filepath"); return E_FAIL; }
+
+    // Try stream data first (IInitializeWithStream path)
+    if (m_streamData.data && m_streamData.size > 0)
+        goto do_decode;
+
+    // Fall back to file path (IInitializeWithFile path)
+    if (!m_filePath) { LogMsg(L"  no filepath and no stream data"); return E_FAIL; }
 
     if (GetFileAttributesW(m_filePath) == INVALID_FILE_ATTRIBUTES) {
         LogMsg(L"  file not found: %s", m_filePath);
@@ -313,91 +358,105 @@ HRESULT CThumbProvider::GetThumbnail(UINT cx, HBITMAP* phbmp, WTS_ALPHATYPE* pdw
         return DelegateToPhotoThumbnail(m_filePath, cx, phbmp, pdwAlpha);
     }
 
-    // Locate avifdec.exe alongside our DLL
-    WCHAR modulePath[MAX_PATH];
-    GetModuleFileNameW(g_hModule, modulePath, MAX_PATH);
-    LogMsg(L"  dll path: %s", modulePath);
-    WCHAR* slash = wcsrchr(modulePath, L'\\');
-    if (!slash) { LogMsg(L"  no slash in path"); return E_FAIL; }
-    StringCchCopyW(slash + 1, MAX_PATH - (slash - modulePath) - 1, L"avifdec.exe");
+do_decode:
+    // --- libavif inline decode ---
 
-    LogMsg(L"  avifdec path: %s", modulePath);
-    if (GetFileAttributesW(modulePath) == INVALID_FILE_ATTRIBUTES) {
-        LogMsg(L"  avifdec not at first path");
-        StringCchCopyW(modulePath, MAX_PATH, L"C:\\Program Files\\AvifThumbHandler\\avifdec.exe");
-        LogMsg(L"  fallback avifdec: %s", modulePath);
-        if (GetFileAttributesW(modulePath) == INVALID_FILE_ATTRIBUTES) {
-            LogMsg(L"  avifdec not found at fallback either");
-            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+    avifRWData raw = AVIF_DATA_EMPTY;
+    if (m_streamData.data && m_streamData.size > 0) {
+        raw = m_streamData;
+        m_streamData.data = NULL;
+        m_streamData.size = 0;
+        LogMsg(L"  using stream data: %zu bytes", raw.size);
+    } else {
+        HANDLE hFile = CreateFileW(m_filePath, GENERIC_READ, FILE_SHARE_READ, NULL,
+            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (hFile == INVALID_HANDLE_VALUE) {
+            LogMsg(L"  CreateFile failed: %u", GetLastError());
+            return E_FAIL;
         }
+        DWORD fileSize = GetFileSize(hFile, NULL);
+        if (fileSize == 0 || fileSize > 50 * 1024 * 1024) {
+            LogMsg(L"  invalid file size: %u", fileSize);
+            CloseHandle(hFile);
+            return E_FAIL;
+        }
+        if (avifRWDataRealloc(&raw, fileSize) != AVIF_RESULT_OK) {
+            LogMsg(L"  avifRWDataRealloc failed");
+            CloseHandle(hFile);
+            return E_OUTOFMEMORY;
+        }
+        DWORD cbRead = 0;
+        ReadFile(hFile, raw.data, fileSize, &cbRead, NULL);
+        raw.size = cbRead;
+        CloseHandle(hFile);
     }
 
-    // Create temp output path
-    WCHAR tempDir[MAX_PATH];
-    if (!GetTempPathW(MAX_PATH, tempDir)) { LogMsg(L"  GetTempPath failed"); return E_FAIL; }
-
-    WCHAR tempFile[MAX_PATH];
-    if (!GetTempFileNameW(tempDir, L"avt", 0, tempFile)) {
-        LogMsg(L"  GetTempFileName failed: %u", GetLastError());
-        return E_FAIL;
+    avifDecoder* decoder = avifDecoderCreate();
+    if (!decoder) {
+        LogMsg(L"  avifDecoderCreate failed");
+        avifRWDataFree(&raw);
+        return E_OUTOFMEMORY;
     }
-    size_t tlen = wcslen(tempFile);
-    StringCchCopyW(tempFile + tlen - 4, 5, L".png");
 
-    // Build command line
-    WCHAR cmdLine[4096];
-    StringCchPrintfW(cmdLine, 4096, L"\"%s\" \"%s\" \"%s\"",
-        modulePath, m_filePath, tempFile);
-    LogMsg(L"  cmdline: %s", cmdLine);
-
-    // Launch avifdec.exe
-    PROCESS_INFORMATION pi = { 0 };
-    STARTUPINFOW si = { 0 };
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
-
-    BOOL ok = CreateProcessW(NULL, cmdLine, NULL, NULL, FALSE,
-        CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
-    if (!ok) {
-        DWORD err = GetLastError();
-        LogMsg(L"  CreateProcess failed: %u", err);
-        DeleteFileW(tempFile);
-        return HRESULT_FROM_WIN32(err);
-    }
-    LogMsg(L"  process started: pid=%u", pi.dwProcessId);
-
-    WaitForSingleObject(pi.hProcess, 30000);
-    DWORD exitCode = 0;
-    GetExitCodeProcess(pi.hProcess, &exitCode);
-    LogMsg(L"  process exited: code=%u", exitCode);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-
-    if (exitCode != 0) {
-        LogMsg(L"  avifdec failed: exit=%u", exitCode);
-        DeleteFileW(tempFile);
+    avifResult result = avifDecoderSetIOMemory(decoder, raw.data, raw.size);
+    if (result != AVIF_RESULT_OK) {
+        LogMsg(L"  avifDecoderSetIOMemory failed: %d", result);
+        avifDecoderDestroy(decoder);
+        avifRWDataFree(&raw);
         return E_FAIL;
     }
 
-    // Check temp file exists
-    if (GetFileAttributesW(tempFile) == INVALID_FILE_ATTRIBUTES) {
-        LogMsg(L"  temp PNG not created");
+    result = avifDecoderParse(decoder);
+    if (result != AVIF_RESULT_OK) {
+        LogMsg(L"  avifDecoderParse failed: %d", result);
+        avifDecoderDestroy(decoder);
+        avifRWDataFree(&raw);
         return E_FAIL;
     }
-    LogMsg(L"  temp PNG created");
 
-    // Load PNG with GDI+
+    result = avifDecoderNextImage(decoder);
+    if (result != AVIF_RESULT_OK) {
+        LogMsg(L"  avifDecoderNextImage failed: %d", result);
+        avifDecoderDestroy(decoder);
+        avifRWDataFree(&raw);
+        return E_FAIL;
+    }
+
+    avifImage* image = decoder->image;
+    LogMsg(L"  decoded: %ux%u depth=%u", image->width, image->height, image->depth);
+
+    avifRGBImage rgb;
+    memset(&rgb, 0, sizeof(rgb));
+    avifRGBImageSetDefaults(&rgb, image);
+    rgb.format = AVIF_RGB_FORMAT_BGRA;
+    rgb.depth = 8;
+    rgb.chromaUpsampling = AVIF_CHROMA_UPSAMPLING_BILINEAR;
+    avifRGBImageAllocatePixels(&rgb);
+
+    result = avifImageYUVToRGB(image, &rgb);
+    if (result != AVIF_RESULT_OK) {
+        LogMsg(L"  avifImageYUVToRGB failed: %d", result);
+        avifRGBImageFreePixels(&rgb);
+        avifDecoderDestroy(decoder);
+        avifRWDataFree(&raw);
+        return E_FAIL;
+    }
+
+    UINT w = rgb.width;
+    UINT h = rgb.height;
+    LogMsg(L"  RGB: %ux%u", w, h);
+
     HRESULT hr = EnsureGdiplus();
-    if (FAILED(hr)) { LogMsg(L"  GDI+ init failed"); DeleteFileW(tempFile); return hr; }
+    if (FAILED(hr)) {
+        LogMsg(L"  GDI+ init failed");
+        avifRGBImageFreePixels(&rgb);
+        avifDecoderDestroy(decoder);
+        avifRWDataFree(&raw);
+        return hr;
+    }
 
-    Gdiplus::Bitmap pngBitmap(tempFile);
-    UINT w = pngBitmap.GetWidth();
-    UINT h = pngBitmap.GetHeight();
-    LogMsg(L"  PNG: %ux%u", w, h);
-    if (w == 0 || h == 0) { DeleteFileW(tempFile); return E_FAIL; }
+    Gdiplus::Bitmap srcBmp(w, h, rgb.rowBytes, PixelFormat32bppARGB, rgb.pixels);
 
-    // Scale proportionally to fit cx
     UINT thumbW, thumbH;
     if (w > h) {
         thumbW = cx;
@@ -410,13 +469,15 @@ HRESULT CThumbProvider::GetThumbnail(UINT cx, HBITMAP* phbmp, WTS_ALPHATYPE* pdw
     Gdiplus::Bitmap scaledBmp(thumbW, thumbH, PixelFormat32bppARGB);
     Gdiplus::Graphics g(&scaledBmp);
     g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
-    g.DrawImage(&pngBitmap, 0, 0, thumbW, thumbH);
+    g.DrawImage(&srcBmp, 0, 0, thumbW, thumbH);
     g.Flush();
 
     Gdiplus::Color transparent(0, 0, 0, 0);
     Gdiplus::Status st = scaledBmp.GetHBITMAP(transparent, phbmp);
 
-    DeleteFileW(tempFile);
+    avifRGBImageFreePixels(&rgb);
+    avifDecoderDestroy(decoder);
+    avifRWDataFree(&raw);
 
     if (st != Gdiplus::Ok) {
         LogMsg(L"  GetHBITMAP failed: %d", st);
@@ -471,8 +532,7 @@ extern "C" HRESULT __stdcall DllRegisterServer()
     RegCloseKey(hk);
 
     // ---- DisableProcessIsolation ----
-    // Must use IInitializeWithStream to run in dllhost; we use IInitializeWithFile
-    // so disable isolation so Explorer loads us in-process (not in dllhost.exe)
+    // Required for IInitializeWithFile to work in-process (avoids dllhost isolation).
     r = RegCreateKeyExW(HKEY_LOCAL_MACHINE,
         L"SOFTWARE\\Classes\\CLSID\\{DF4C9A6E-5B3A-4F2A-9E8C-7D1E3F2A5B0C}",
         0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hk, NULL);
@@ -482,6 +542,12 @@ extern "C" HRESULT __stdcall DllRegisterServer()
             (BYTE*)&val, sizeof(val));
         RegCloseKey(hk);
     }
+
+    // ---- Remove system PropertyHandler for .avif ----
+    // The built-in PhotoMetadataHandler/MSHEIF.dll property handler is slow on AVIF,
+    // causing 6-7 second hangs in file dialogs. Our thumbnails don't need it.
+    RegDeleteKeyW(HKEY_LOCAL_MACHINE,
+        L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\PropertySystem\\PropertyHandlers\\.avif");
 
     // ---- .avif extension registrations ----
     // IThumbnailProvider
@@ -514,7 +580,7 @@ extern "C" HRESULT __stdcall DllRegisterServer()
         RegSetValueExW(hk, L"PerceivedType", 0, REG_SZ,
             (BYTE*)L"image", 12);
         RegSetValueExW(hk, L"ContentType", 0, REG_SZ,
-            (BYTE*)L"application/avif", 38);
+            (BYTE*)L"image/avif", 20);
         RegCloseKey(hk);
     }
 
@@ -523,13 +589,11 @@ extern "C" HRESULT __stdcall DllRegisterServer()
 
 extern "C" HRESULT __stdcall DllUnregisterServer()
 {
-    // Clean up per-extension registrations
     RegDeleteKeyW(HKEY_LOCAL_MACHINE,
         L"SOFTWARE\\Classes\\.avif\\ShellEx\\{e357fccd-a995-4576-b01f-234630154e96}");
     RegDeleteKeyW(HKEY_LOCAL_MACHINE,
         L"SOFTWARE\\Classes\\.avif\\ShellEx\\{BB2E617C-0920-11d1-9A0B-00C04FC2D6C1}");
 
-    // Clean up our CLSID (including subkeys)
     RegDeleteKeyW(HKEY_LOCAL_MACHINE,
         L"SOFTWARE\\Classes\\CLSID\\{DF4C9A6E-5B3A-4F2A-9E8C-7D1E3F2A5B0C}\\InprocServer32");
     RegDeleteKeyW(HKEY_LOCAL_MACHINE,

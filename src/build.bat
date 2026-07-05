@@ -38,35 +38,24 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 set SRC=%~dp0
-set OUTDIR=%SRC%
+set OUTDIR=%~dp0..\bin\
 
 REM === Build AvifThumbCpp.dll (IThumbnailProvider) ===
 echo === Compiling AvifThumbCpp.dll ===
-cl /nologo /LD /MT /O2 /GS- /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_USRDLL" /D "_WINDLL" ^
-    /D "_CRT_SECURE_NO_WARNINGS" /EHsc /W4 "%SRC%dllmain.cpp" ^
+cl /nologo /LD /MD /O2 /GS- /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_USRDLL" /D "_WINDLL" ^
+    /D "_CRT_SECURE_NO_WARNINGS" /EHsc /W4 -I"%~dp0." "%SRC%dllmain.cpp" ^
     /link /SUBSYSTEM:WINDOWS /DLL /MACHINE:x64 /DEF:"%SRC%exports.def" ^
+    "%~dp0..\lib\avif.lib" ^
     kernel32.lib user32.lib gdi32.lib gdiplus.lib ole32.lib oleaut32.lib uuid.lib shlwapi.lib advapi32.lib ^
     /OUT:"%OUTDIR%AvifThumbCpp.dll"
 if %ERRORLEVEL% NEQ 0 (
+    echo.
     echo AvifThumbCpp.dll compilation FAILED
     exit /b 1
 )
 
-REM === Build AvifWIC.dll (WIC BitmapDecoder) ===
-echo === Compiling AvifWIC.dll ===
-cl /nologo /LD /MT /O2 /GS- /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_USRDLL" /D "_WINDLL" ^
-    /D "_CRT_SECURE_NO_WARNINGS" /EHsc /W4 "%SRC%avif_wic2.cpp" ^
-    /link /SUBSYSTEM:WINDOWS /DLL /MACHINE:x64 /DEF:"%SRC%exports.def" ^
-    kernel32.lib user32.lib gdi32.lib gdiplus.lib ole32.lib oleaut32.lib uuid.lib shlwapi.lib advapi32.lib ^
-    /OUT:"%OUTDIR%AvifWIC.dll"
-if %ERRORLEVEL% NEQ 0 (
-    echo AvifWIC.dll compilation FAILED
-    exit /b 1
-)
-
-echo === All compilations OK ===
-echo   %OUTDIR%AvifThumbCpp.dll
-echo   %OUTDIR%AvifWIC.dll
 echo.
-echo To register: regsvr32 "%OUTDIR%AvifThumbCpp.dll"
-echo               regsvr32 "%OUTDIR%AvifWIC.dll"
+echo === Compilation OK ===
+echo   %OUTDIR%AvifThumbCpp.dll
+echo.
+echo To register: install.bat (run as Administrator)

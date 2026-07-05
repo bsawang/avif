@@ -6,9 +6,9 @@
 ![GitHub Release](https://img.shields.io/github/v/release/bsawang/avif?logo=github)
 ![License](https://img.shields.io/badge/License-Non--Commercial_|_Dual-red)
 
-**Windows 10 AVIF 缩略图解决方案** — 原生 C++ COM Shell 扩展，为 Windows 10 资源管理器添加 AVIF 缩略图预览支持。无需升级到 Windows 11，即可在文件资源管理器中直接查看 .avif 图片的缩略图。
+**Windows 10 AVIF 缩略图解决方案** — 原生 C++ COM Shell 扩展，为 Windows 10 资源管理器添加 AVIF 缩略图预览支持。基于 libavif 内联解码，无需依赖外部解码器。
 
-> **状态**: Windows 10 22H2 测试通过，MSVC 2022 编译。
+> **状态**: Windows 10 22H2 测试通过，MSVC 2022 编译。资源管理器和文件对话框均正常工作。
 >
 > [English version](README.en.md)
 
@@ -47,10 +47,6 @@ Windows 11 已内置 AVIF 编解码器支持，可直接显示缩略图。本工
 :: 复制 DLL
 copy bin\AvifThumbCpp.dll C:\Windows\System32\
 
-:: 复制解码器
-mkdir "C:\Program Files\AvifThumbHandler"
-copy bin\avifdec.exe "C:\Program Files\AvifThumbHandler\"
-
 :: 注册 COM 组件
 regsvr32 C:\Windows\System32\AvifThumbCpp.dll
 
@@ -62,28 +58,72 @@ taskkill /f /im explorer.exe & start explorer.exe
 
 如果缩略图没有立即显示，请以管理员身份运行 `clear_cache.bat`。
 
-### 常见问题
-
-**问：缩略图还是不显示？**
-- 检查调试日志：`C:\Windows\Temp\AvifThumbCpp.log`
-- 清理缩略图缓存：`clear_cache.bat`
-- 确认解码器存在：`C:\Program Files\AvifThumbHandler\avifdec.exe`
-
-**问：安装时提示文件被锁定？**
-因为 Explorer 会加载 DLL，安装时可能提示文件占用。脚本会自动重启 Explorer。如果失败，请关闭所有资源管理器窗口后重试。
-
 ### 工作原理
 
 ```
 资源管理器（进程内加载）
-  └─ AvifThumbCpp.dll
+  └─ AvifThumbCpp.dll (1.9MB, libavif 内联解码)
        └─ IThumbnailProvider::GetThumbnail(cx=256)
-            └─ avifdec.exe（子进程）
-                 └─ 解码 .avif → PNG
-            └─ GDI+ 加载 PNG → 缩放 → 输出位图
+            └─ libavif C API 解码 → YUV → BGRA
+            └─ GDI+ 缩放 → HBITMAP
 ```
 
-本实现使用 `IInitializeWithFile` 接口，因此需要设置 `DisableProcessIsolation = 1`。完整开发者参考（架构、源码构建、注册表配置）见 [RESEARCH.md](RESEARCH.md)。
+### 性能对比
+
+| 版本 | 方式 | 每张耗时 | 外部依赖 |
+|------|------|---------|---------|
+| v1（旧版） | avifdec.exe 子进程 | 200-500ms | avifdec.exe (12MB) |
+| **v2（当前）** | **libavif 内联解码** | **10-50ms** | **无** |
+
+### 常见问题
+
+**问：安装时提示文件被锁定？**
+因为 Explorer 会加载 DLL，安装时可能提示文件占用。脚本会自动重启 Explorer。如果失败，关闭所有资源管理器窗口后重试。
+
+**问：文件对话框（浏览器上传等）打开 AVIF 文件夹卡顿？**
+v2 已修复此问题。如果还遇到，确认 PropertyHandler 已删除（运行 `install.bat` 时会自动处理）。
+
+---
+
+## 开发者参考
+
+### 项目结构
+
+```
+publish/
+├── bin/
+│   └── AvifThumbCpp.dll      ← 编译好的 DLL（直接使用）
+├── src/
+│   ├── dllmain.cpp            ← COM 实现（单个源文件）
+│   ├── avif/                  ← libavif 头文件
+│   ├── exports.def            ← DLL 导出定义
+│   └── build.bat              ← MSVC 构建脚本
+├── lib/
+│   └── avif.lib               ← libavif + dav1d 静态库
+├── install.bat                ← 安装脚本
+└── clear_cache.bat            ← 清理缩略图缓存
+```
+
+### 构建要求
+
+- Visual Studio 2022 Build Tools
+  - 工作负载："使用 C++ 的桌面开发"
+  - Windows SDK 10.0.26100.0+
+- cmake、meson、ninja（`pip install cmake meson ninja`）
+- nasm 2.16+
+
+完整构建指南见 [RESEARCH.md](RESEARCH.md#83-从源码构建)。
+
+### 接口实现
+
+| 接口 | 用途 |
+|------|------|
+| `IInitializeWithFile` | 资源管理器初始化（文件路径） |
+| `IInitializeWithStream` | dllhost 初始化（数据流） |
+| `IThumbnailProvider` | 缩略图生成 |
+| `IExtractImage2` | 旧版兼容 |
+
+---
 
 ## 许可证
 
@@ -92,20 +132,8 @@ taskkill /f /im explorer.exe & start explorer.exe
 - ✅ **非商业用途** — 免费使用，需保留版权声明
 - ❌ **商业用途** — 需取得授权，请联系 **bsawang@126.com**
 
-本工具使用了 libavif（BSD）、dav1d（BSD）、libyuv（BSD）及 IJG 等第三方组件。
-
-## 编程环境
-
-本项目完全使用 AI 辅助编程完成：
-
-| 工具 | 版本 |
-|------|------|
-| VS Code | 1.127.0 |
-| Claude Code | 2.1.168 |
-| DeepSeek | V4 Flash |
-| 编译器 | MSVC 14.44 (VS 2022 17.14) |
-| 操作系统 | Windows 10 Pro 22H2 |
+本工具使用了 libavif（BSD）、dav1d（BSD）及 IJG 等第三方组件。
 
 ---
 
-[English version](README.en.md)
+[English version](README.en.md) | [完整研究文档](RESEARCH.md)

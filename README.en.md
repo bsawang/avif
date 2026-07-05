@@ -6,9 +6,11 @@
 ![GitHub Release](https://img.shields.io/github/v/release/bsawang/avif?logo=github)
 ![License](https://img.shields.io/badge/License-Non--Commercial_|_Dual-red)
 
-**AVIF thumbnail preview for Windows 10 Explorer.** A native C++ COM Shell Extension that adds AVIF thumbnail support to Windows 10 File Explorer — no Windows 11 upgrade required. View .avif image thumbnails directly in Windows 10.
+**AVIF thumbnail preview for Windows 10 Explorer.** A native C++ COM Shell Extension using libavif inline decode — no external decoder dependencies.
 
-> **Status**: Working on Windows 10 22H2. Built with MSVC 2022.
+> **Status**: Working on Windows 10 22H2. Built with MSVC 2022. Both Explorer and file dialogs work smoothly.
+>
+> [中文版](README.md)
 
 ---
 
@@ -19,7 +21,7 @@
 | **Windows 10** | ❌ No native AVIF thumbnail — **this tool is for you** |
 | **Windows 11** | ✅ Native AVIF support built-in (no extra tools needed) |
 
-Windows 11 has native AVIF codec support and shows thumbnails out of the box. This handler is primarily designed for **Windows 10 users** who want AVIF thumbnail preview without upgrading their OS.
+Windows 11 has native AVIF codec support and shows thumbnails out of the box. This handler is primarily designed for **Windows 10 users**.
 
 ---
 
@@ -45,10 +47,6 @@ Windows 11 has native AVIF codec support and shows thumbnails out of the box. Th
 :: Copy DLL
 copy bin\AvifThumbCpp.dll C:\Windows\System32\
 
-:: Copy decoder
-mkdir "C:\Program Files\AvifThumbHandler"
-copy bin\avifdec.exe "C:\Program Files\AvifThumbHandler\"
-
 :: Register COM
 regsvr32 C:\Windows\System32\AvifThumbCpp.dll
 
@@ -60,28 +58,72 @@ taskkill /f /im explorer.exe & start explorer.exe
 
 If thumbnails don't show immediately, run `clear_cache.bat` as Administrator.
 
-### Troubleshooting
-
-**Q: Thumbnails still not showing?**
-- Check debug log: `C:\Windows\Temp\AvifThumbCpp.log`
-- Clear thumbnail cache: `clear_cache.bat`
-- Ensure `avifdec.exe` exists at `C:\Program Files\AvifThumbHandler\`
-
-**Q: "File locked" when installing?**
-- The DLL is in use because Explorer loads it in-process. The script restarts Explorer automatically. If it fails, close all Explorer windows and try again.
-
 ### How It Works
 
 ```
 Explorer (in-process)
-  └─ AvifThumbCpp.dll
+  └─ AvifThumbCpp.dll (1.9MB, libavif inline decode)
        └─ IThumbnailProvider::GetThumbnail(cx=256)
-            └─ avifdec.exe (subprocess)
-                 └─ decodes .avif → PNG
-            └─ GDI+ loads PNG → scales → HBITMAP
+            └─ libavif C API decode → YUV → BGRA
+            └─ GDI+ scale → HBITMAP
 ```
 
-The handler uses `DisableProcessIsolation = 1` because it implements `IInitializeWithFile` instead of `IInitializeWithStream`. See [RESEARCH.en.md](RESEARCH.en.md) for full investigation details and developer reference.
+### Performance Comparison
+
+| Version | Method | Per-thumbnail | External Dependencies |
+|---------|--------|--------------|----------------------|
+| v1 (legacy) | avifdec.exe subprocess | 200-500ms | avifdec.exe (12MB) |
+| **v2 (current)** | **libavif inline decode** | **10-50ms** | **None** |
+
+### Troubleshooting
+
+**Q: "File locked" when installing?**
+The script restarts Explorer automatically. If it fails, close all Explorer windows and try again.
+
+**Q: File dialog (browser upload, etc.) slow when opening AVIF folders?**
+v2 fixed this by removing the slow system PropertyHandler. Run `install.bat` to apply.
+
+---
+
+## Developer Reference
+
+### Project Structure
+
+```
+publish/
+├── bin/
+│   └── AvifThumbCpp.dll      ← Pre-built DLL
+├── src/
+│   ├── dllmain.cpp            ← COM implementation (single file)
+│   ├── avif/                  ← libavif headers
+│   ├── exports.def            ← DLL exports
+│   └── build.bat              ← MSVC build script
+├── lib/
+│   └── avif.lib               ← libavif + dav1d static lib
+├── install.bat                ← Install script
+└── clear_cache.bat            ← Clear thumbnail cache
+```
+
+### Interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `IInitializeWithFile` | Explorer init (file path) |
+| `IInitializeWithStream` | dllhost init (stream data) |
+| `IThumbnailProvider` | Thumbnail generation |
+| `IExtractImage2` | Legacy fallback |
+
+### Build Requirements
+
+- Visual Studio 2022 Build Tools
+  - Workload: "Desktop development with C++"
+  - Windows SDK 10.0.26100.0+
+- cmake, meson, ninja (`pip install cmake meson ninja`)
+- nasm 2.16+
+
+Full build guide in [RESEARCH.en.md](RESEARCH.en.md#83-building-from-source).
+
+---
 
 ## License
 
@@ -90,20 +132,8 @@ The handler uses `DisableProcessIsolation = 1` because it implements `IInitializ
 - ✅ **Non-commercial use** — free, with attribution required
 - ❌ **Commercial use** — requires a separate license agreement; contact **bsawang@126.com**
 
-This software incorporates third-party components: libavif (BSD), dav1d (BSD), libyuv (BSD), and IJG.
-
-## Development Environment
-
-This project was built entirely with AI-assisted programming:
-
-| Tool | Version |
-|------|---------|
-| VS Code | 1.127.0 |
-| Claude Code | 2.1.168 |
-| DeepSeek | V4 Flash |
-| Compiler | MSVC 14.44 (VS 2022 17.14) |
-| OS | Windows 10 Pro 22H2 |
+This software incorporates third-party components: libavif (BSD), dav1d (BSD), and IJG.
 
 ---
 
-[中文版](README.md)
+[中文版](README.md) | [Full Research Document](RESEARCH.en.md)

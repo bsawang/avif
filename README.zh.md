@@ -1,6 +1,6 @@
 # Windows 10 资源管理器 AVIF 缩略图支持
 
-原生 C++ COM Shell 扩展，为 Windows 10 资源管理器添加 **AVIF 缩略图预览** 支持。
+原生 C++ COM Shell 扩展，为 Windows 10 资源管理器添加 **AVIF 缩略图预览** 支持。基于 libavif 内联解码，性能较 v1 子进程方案提升 10 倍。
 
 > **状态**: Windows 10 22H2 测试通过，MSVC 2022 编译。
 
@@ -13,16 +13,9 @@
 | **Windows 10** | ❌ 无原生 AVIF 缩略图支持 — **本工具可以解决** |
 | **Windows 11** | ✅ 自带原生 AVIF 支持，开箱即用 |
 
-Windows 11 已内置 AVIF 编解码器支持，可直接显示缩略图。本工具主要面向 **Windows 10 用户**，无需升级系统即可获得 AVIF 缩略图预览。
-
 ---
 
 ## 第一部分：快速开始（普通用户）
-
-### 环境要求
-
-- Windows 10（推荐 22H2）
-- 管理员权限（COM 注册需要）
 
 ### 安装方法
 
@@ -31,22 +24,13 @@ Windows 11 已内置 AVIF 编解码器支持，可直接显示缩略图。本工
 1. 下载[最新发布包](https://github.com/bsawang/avif/releases)
 2. 解压到任意目录
 3. **右键** `install.bat` → **以管理员身份运行**
-4. 完成 — 打开 AVIF 文件夹即可看到缩略图
+4. 完成
 
 **方式 B：手动安装**
 
 ```cmd
-:: 复制 DLL
 copy bin\AvifThumbCpp.dll C:\Windows\System32\
-
-:: 复制解码器
-mkdir "C:\Program Files\AvifThumbHandler"
-copy bin\avifdec.exe "C:\Program Files\AvifThumbHandler\"
-
-:: 注册 COM 组件
 regsvr32 C:\Windows\System32\AvifThumbCpp.dll
-
-:: 重启资源管理器
 taskkill /f /im explorer.exe & start explorer.exe
 ```
 
@@ -54,43 +38,57 @@ taskkill /f /im explorer.exe & start explorer.exe
 
 如果缩略图没有立即显示，请以管理员身份运行 `clear_cache.bat`。
 
-### 常见问题
-
-**问：缩略图还是不显示？**
-- 检查调试日志：`C:\Windows\Temp\AvifThumbCpp.log`
-- 清理缩略图缓存：`clear_cache.bat`
-- 确认解码器存在：`C:\Program Files\AvifThumbHandler\avifdec.exe`
-
-**问：安装时提示文件被锁定？**
-因为 Explorer 会加载 DLL，安装时可能提示文件占用。脚本会自动重启 Explorer。如果失败，请关闭所有资源管理器窗口后重试。
-
 ### 工作原理
 
 ```
 资源管理器（进程内加载）
-  └─ AvifThumbCpp.dll
+  └─ AvifThumbCpp.dll (1.9MB)
        └─ IThumbnailProvider::GetThumbnail(cx=256)
-            └─ avifdec.exe（子进程）
-                 └─ 解码 .avif → PNG
-            └─ GDI+ 加载 PNG → 缩放 → 输出位图
+            └─ libavif C API 解码 → YUV → BGRA
+            └─ GDI+ 缩放 → HBITMAP
 ```
 
-本实现使用 `IInitializeWithFile` 接口，因此需要设置 `DisableProcessIsolation = 1`。详细探索过程见 [RESEARCH.zh.md](RESEARCH.zh.md)。
+### 性能对比
+
+| 版本 | 方式 | 每张耗时 | 外部依赖 |
+|------|------|---------|---------|
+| v1（旧） | avifdec.exe 子进程 | 200-500ms | avifdec.exe (12MB) |
+| **v2（当前）** | **libavif 内联解码** | **10-50ms** | **无** |
+
+### 常见问题
+
+**问：文件对话框（浏览器上传等）打开 AVIF 文件夹卡顿？**
+v2 已解决。`install.bat` 会自动删除导致卡顿的系统属性处理器。
 
 ---
 
 ## 第二部分：开发者参考
 
-### 架构说明
+### 项目结构
 
-本方案包含两个 COM 组件：
+```
+publish/
+├── bin/AvifThumbCpp.dll    ← 编译好的 DLL
+├── src/
+│   ├── dllmain.cpp          ← COM 实现（单个源文件）
+│   ├── avif/                ← libavif 头文件
+│   ├── exports.def          ← DLL 导出定义
+│   └── build.bat            ← MSVC 构建脚本
+├── lib/avif.lib             ← libavif + dav1d 静态库（4.3MB）
+├── install.bat              ← 安装脚本
+└── clear_cache.bat          ← 清理缩略图缓存
+```
 
-| 组件 | 源文件 | 用途 |
-|------|--------|------|
-| **缩略图提供器** | `src/dllmain.cpp` | COM ShellEx：`IThumbnailProvider` + `IExtractImage2` + `IInitializeWithFile` |
-| **WIC 解码器** | `src/avif_wic2.cpp` | WIC 位图解码器（已注册但缩略图路径不使用） |
+### 架构
 
-缩略图通过启动 **avifdec.exe** 子进程生成（而非直接链接 libavif），保持 DLL 小巧，COM 架构简单。
+| 接口 | 说明 |
+|------|------|
+| `IInitializeWithFile` | 资源管理器使用（文件路径初始化） |
+| `IInitializeWithStream` | dllhost 隔离进程使用（数据流初始化） |
+| `IThumbnailProvider` | 缩略图生成（主要路径） |
+| `IExtractImage2` | 旧版兼容 |
+
+非 AVIF 文件委托给系统的 `PhotoMetadataHandler.dll` 处理。
 
 ### 注册表配置
 
@@ -105,45 +103,41 @@ taskkill /f /im explorer.exe & start explorer.exe
 ### 从源码构建
 
 **构建要求：**
-- Visual Studio 2022 Build Tools（或完整版 VS 2022）
+- Visual Studio 2022 Build Tools
   - 工作负载："使用 C++ 的桌面开发"
   - Windows SDK 10.0.26100.0+
-- libavif 工具（`avifdec.exe`）— 已包含在 `bin/` 目录
+- cmake、meson、ninja（`pip install cmake meson ninja`）
+- nasm 2.16+
 
-**构建：**
+**构建 libavif 静态库：**
+```cmd
+mkdir build & cd build
+cmake .. -G "Ninja" -DAVIF_BUILD_APPS=OFF -DAVIF_BUILD_TESTS=OFF ^
+    -DAVIF_CODEC_DAV1D=ON -DAVIF_LOCAL_DAV1D=ON ^
+    -DCMAKE_C_FLAGS_RELEASE="/MD /O2 /GS-"
+ninja
+copy avif.lib ..\..\publish\lib\
+```
 
+**构建 DLL：**
 ```cmd
 cd src
 build.bat
 ```
 
-构建脚本会自动检测 MSVC 安装路径。
+**输出：** `AvifThumbCpp.dll` — 1.9MB
 
-**构建产物：**
-- `AvifThumbCpp.dll` — 缩略图处理器
-- `AvifWIC.dll` — WIC 解码器（可选，缩略图不需要）
+### 调试
 
-调试时可查看跟踪日志：`C:\Windows\Temp\AvifThumbCpp.log`
-
-### 实现细节
-
-- 实现三个 COM 接口以获得最大兼容性：`IThumbnailProvider`（现代）、`IExtractImage2`（旧版兼容）和 `IInitializeWithFile`（初始化）
-- 非 AVIF 文件委托给系统的 `PhotoMetadataHandler.dll` 处理
-- WIC 解码器（`AvifWIC.dll`）是独立组件，可通过 `IWICImagingFactory` API 工作，但**不**被资源管理器缩略图管道使用
-
-### 关键发现
-
-所有失败方案的根本原因是 **dllhost 进程隔离**：
-
-1. Windows 10 默认将缩略图处理器加载到隔离的 `dllhost.exe` 进程中运行
-2. 隔离进程只支持 `IInitializeWithStream` 接口
-3. 我们的实现使用 `IInitializeWithFile`，导致静默失败
-4. 设置 `DisableProcessIsolation = 1` 后，Explorer 直接在自身进程加载 DLL，绕过 dllhost
-
-### 许可证
-
-MIT — 详见 [LICENSE](LICENSE)。
+日志位置：`%TEMP%\AvifThumbCpp.log` 或 `C:\Windows\Temp\AvifThumbCpp.log`
 
 ---
 
-[← 返回语言选择](README.md) | [English version](README.en.md)
+## 许可证
+
+**双授权模式** — 详见 [LICENSE](LICENSE)。
+
+- ✅ **非商业用途** — 免费使用，需保留版权声明
+- ❌ **商业用途** — 需取得授权，请联系 **bsawang@126.com**
+
+---
