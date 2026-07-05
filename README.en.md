@@ -1,5 +1,10 @@
 # AVIF Thumbnail Handler for Windows 10 Explorer
 
+![Windows 10](https://img.shields.io/badge/Windows_10-22H2-0078D6?logo=windows)
+![C++](https://img.shields.io/badge/C++-COM-00599C?logo=cplusplus)
+![MSVC](https://img.shields.io/badge/MSVC-2022-800080)
+![License](https://img.shields.io/badge/License-Non--Commercial_|_Dual-red)
+
 Native C++ COM Shell Extension that adds **AVIF thumbnail preview** to Windows 10 Explorer.
 
 > **Status**: Working on Windows 10 22H2. Built with MSVC 2022.

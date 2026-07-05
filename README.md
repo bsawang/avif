@@ -1,5 +1,10 @@
 # Windows 10 资源管理器 AVIF 缩略图支持
 
+![Windows 10](https://img.shields.io/badge/Windows_10-22H2-0078D6?logo=windows)
+![C++](https://img.shields.io/badge/C++-COM-00599C?logo=cplusplus)
+![MSVC](https://img.shields.io/badge/MSVC-2022-800080)
+![License](https://img.shields.io/badge/License-Non--Commercial_|_Dual-red)
+
 原生 C++ COM Shell 扩展，为 Windows 10 资源管理器添加 **AVIF 缩略图预览** 支持。
 
 > **状态**: Windows 10 22H2 测试通过，MSVC 2022 编译。
