@@ -2,7 +2,7 @@
 
 > **Date**: 2026-07-06 (Final update)
 > **Environment**: Windows 10 Pro 22H2 (19045.4529)
-> **Version**: v2 — libavif inline decode + file dialog performance fix
+> **Version**: v1.0.1 — libavif inline decode + file dialog performance fix
 >
 > [中文版](RESEARCH.md)
 

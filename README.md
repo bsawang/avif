@@ -74,7 +74,7 @@ taskkill /f /im explorer.exe & start explorer.exe
 | 版本 | 方式 | 每张耗时 | 外部依赖 |
 |------|------|---------|---------|
 | v1（旧版） | avifdec.exe 子进程 | 200-500ms | avifdec.exe (12MB) |
-| **v2（当前）** | **libavif 内联解码** | **10-50ms** | **无** |
+| **v1.0.1（当前）** | **libavif 内联解码** | **10-50ms** | **无** |
 
 ### 常见问题
 
@@ -82,7 +82,7 @@ taskkill /f /im explorer.exe & start explorer.exe
 因为 Explorer 会加载 DLL，安装时可能提示文件占用。脚本会自动重启 Explorer。如果失败，关闭所有资源管理器窗口后重试。
 
 **问：文件对话框（浏览器上传等）打开 AVIF 文件夹卡顿？**
-v2 已修复此问题。如果还遇到，确认 PropertyHandler 已删除（运行 `install.bat` 时会自动处理）。
+v1.0.1 已修复此问题。如果还遇到，确认 PropertyHandler 已删除（运行 `install.bat` 时会自动处理）。
 
 ---
 

@@ -74,7 +74,7 @@ Explorer (in-process)
 | Version | Method | Per-thumbnail | External Dependencies |
 |---------|--------|--------------|----------------------|
 | v1 (legacy) | avifdec.exe subprocess | 200-500ms | avifdec.exe (12MB) |
-| **v2 (current)** | **libavif inline decode** | **10-50ms** | **None** |
+| **v1.0.1 (current)** | **libavif inline decode** | **10-50ms** | **None** |
 
 ### Troubleshooting
 
@@ -82,7 +82,7 @@ Explorer (in-process)
 The script restarts Explorer automatically. If it fails, close all Explorer windows and try again.
 
 **Q: File dialog (browser upload, etc.) slow when opening AVIF folders?**
-v2 fixed this by removing the slow system PropertyHandler. Run `install.bat` to apply.
+v1.0.1 fixed this by removing the slow system PropertyHandler. Run `install.bat` to apply.
 
 ---
 
