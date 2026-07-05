@@ -7,6 +7,7 @@
 lastbuildstate
 *.o
 *.a
+*.lib
 
 # Keep the pre-built DLL, ignore other EXEs
 *.exe
