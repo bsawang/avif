@@ -3,6 +3,7 @@
 ![Windows 10](https://img.shields.io/badge/Windows_10-22H2-0078D6?logo=windows)
 ![C++](https://img.shields.io/badge/C++-COM-00599C?logo=cplusplus)
 ![MSVC](https://img.shields.io/badge/MSVC-2022-800080)
+![GitHub Release](https://img.shields.io/github/v/release/bsawang/avif?logo=github)
 ![License](https://img.shields.io/badge/License-Non--Commercial_|_Dual-red)
 
 原生 C++ COM Shell 扩展，为 Windows 10 资源管理器添加 **AVIF 缩略图预览** 支持。
