@@ -1,0 +1,11 @@
+*.obj
+*.exp
+*.lib
+*.exe
+*.o
+*.a
+*.ilk
+*.pdb
+*.tlog
+*.log
+lastbuildstate
