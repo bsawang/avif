@@ -94,10 +94,10 @@ taskkill /f /im explorer.exe & start explorer.exe
 
 | 工具 | 版本 |
 |------|------|
-| VS Code | 最新 |
-| Claude Code | Claude 3.5 Sonnet (2024-10-22) |
-| DeepSeek | DeepSeek R1 (辅助代码生成) |
-| 编译器 | MSVC 2022 (VS 17.x) |
+| VS Code | 1.127.0 |
+| Claude Code | 2.1.168 |
+| DeepSeek | V4 Flash |
+| 编译器 | MSVC 14.44 (VS 2022 17.14) |
 | 操作系统 | Windows 10 Pro 22H2 |
 
 ---

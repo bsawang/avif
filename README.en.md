@@ -92,10 +92,10 @@ This project was built entirely with AI-assisted programming:
 
 | Tool | Version |
 |------|---------|
-| VS Code | Latest |
-| Claude Code | Claude 3.5 Sonnet (2024-10-22) |
-| DeepSeek | DeepSeek R1 (assisted code generation) |
-| Compiler | MSVC 2022 (VS 17.x) |
+| VS Code | 1.127.0 |
+| Claude Code | 2.1.168 |
+| DeepSeek | V4 Flash |
+| Compiler | MSVC 14.44 (VS 2022 17.14) |
 | OS | Windows 10 Pro 22H2 |
 
 ---
